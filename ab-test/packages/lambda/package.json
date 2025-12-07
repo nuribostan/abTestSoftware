@@ -1,0 +1,24 @@
+{
+  "name": "@ab-test/lambda",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "generate": "prisma generate",
+    "zip:config": "cd dist && zip -r config-handler.zip config-handler shared",
+    "zip:event": "cd dist && zip -r event-processor.zip event-processor shared",
+    "zip:admin": "cd dist && zip -r admin-api.zip admin-api shared",
+    "zip:all": "npm run zip:config && npm run zip:event && npm run zip:admin"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.10.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "prisma": "^5.22.0"
+  }
+}

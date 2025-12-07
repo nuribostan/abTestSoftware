@@ -1,0 +1,686 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "./client"
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 1. KULLANICILAR (Dashboard kullanıcıları)
+// ============================================
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String
+  name     String?
+  company  String?
+
+  // Plan bilgileri
+  role UserRole @default(USER)
+  plan UserPlan @default(FREE)
+
+  // Plan limitleri
+  maxProjects          Int @default(3)
+  maxTestsPerProject   Int @default(10)
+  monthlyVisitorLimit  Int @default(10000)
+  currentMonthVisitors Int @default(0)
+
+  // Hesap durumu
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  lastLogin     DateTime?
+
+  // Token'lar
+  verificationToken    String?
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+
+  // İlişkiler
+  projects Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+// ============================================
+// 2. PROJELER (Web siteleri)
+// ============================================
+
+model Project {
+  id           String @id @default(uuid())
+  userId       String
+  name         String
+  domain       String @unique
+  apiKey       String @unique @default(cuid())
+  trackingCode String @default(cuid())
+
+  // Plan limitleri
+  maxProjects          Int @default(0)
+  maxTestsPerProject   Int @default(0)
+  monthlyVisitorLimit  Int @default(0)
+  currentMonthVisitors Int @default(0)
+
+  // Genel Ayarlar
+  isActive          Boolean @default(true)
+  maxTestedVisitors Int     @default(0) // 0 = hesabın aylık sayfa görüntüleme limiti ile sınırlı
+  timezone          String  @default("UTC")
+  timeFormat        String  @default("24h")
+  currencySymbol    String  @default("₺")
+  globalJS          String?
+
+  // istatistikler
+  totalVisitors         Int      @default(0)
+  totalConversions      Int      @default(0)
+  lastVisitorLimitReset DateTime @default(now())
+
+  // İlişkiler
+  locations       Location[]
+  audiences       Audience[]
+  goals           Goal[]
+  changeHistories ChangeHistory[]
+  experiments     Experiment[]
+  events          Event[]
+  visitors        Visitor[]
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([trackingCode])
+  @@map("projects")
+}
+
+// ============================================
+// 3. TESTLER (A/B testleri)
+// ============================================
+
+model Experiment {
+  id        String @id @default(uuid())
+  projectId String
+  name      String
+  url       String
+
+  // test tipi ve durumu
+  type        ExperimentType   @default(AB)
+  status      ExperimentStatus @default(DRAFT)
+  maxVisitors Int              @default(0) // 0 = proje limiti ile sınırlı
+  isArchived  Boolean          @default(false)
+  createdBy   String?
+
+  // zaman bilgileri
+  startDate   DateTime?
+  endDate     DateTime?
+  completedAt DateTime?
+  pausedAt    DateTime?
+  resumedAt   DateTime?
+  duration    Int?      @default(0) // gün cinsinden
+
+  // trafik dağıtımı
+  trafficAllocation Int @default(100) // yüzde cinsinden
+
+  // istatistikler
+  totalVisitors    Int @default(0)
+  totalConversions Int @default(0)
+
+  // İlişkiler
+  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  locations       Location[]
+  variants        Variant[]
+  goals           ExperimentGoal[]
+  assignments     VariantAssignment[]
+  changeHistories ChangeHistory[]
+  liveLogs        LiveLog[]
+  audiences       Audience[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@index([projectId])
+  @@index([status])
+  @@map("experiments")
+}
+
+enum ExperimentType {
+  AA
+  AB
+  MULTIVARIATE
+  SPLIT_URL
+  MULTIPAGE
+  DEPLOYMENT
+}
+
+enum ExperimentStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+}
+
+// ============================================
+// 4. LOCATIONS (URL Hedefleme)
+// ============================================
+
+model Location {
+  id           String       @id @default(uuid())
+  projectId    String
+  experimentId String?
+  name         String
+  description  String?
+  type         LocationType @default(URL)
+  matchType    MatchType    @default(EXACTLY)
+  value        String
+
+  // İlişkiler
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // İlişkiler
+  experiment Experiment? @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  updatedAt  DateTime    @updatedAt
+
+  @@index([experimentId])
+  @@map("experiment_locations")
+}
+
+enum LocationType {
+  URL
+  CUSTOM_JS
+}
+
+enum MatchType {
+  EXACTLY
+  CONTAINS
+  NOT_CONTAINS
+  STARTS_WITH
+  ENDS_WITH
+  REGEX
+}
+
+// ============================================
+// 5. AUDIENCES (Kitle Hedefleme)
+// ============================================
+
+model Audience {
+  id           String        @id @default(uuid())
+  projectId    String
+  experimentId String?
+  name         String
+  description  String?
+  type         AudienceType  @default(ALL_VISITORS)
+  condition    ConditionType @default(AND)
+  operator     OperatorType  @default(IS)
+  value        String?
+
+  // İlişkiler
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  experiment Experiment? @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([experimentId])
+  @@map("experiment_audiences")
+}
+
+enum OperatorType {
+  IS
+  IS_NOT
+}
+
+enum AudienceType {
+  // All Visitors
+  ALL_VISITORS
+
+  // Traffic Sources
+  GOOGLE_TRAFFIC
+  BING_TRAFFIC
+  YAHOO_TRAFFIC
+  ASK_TRAFFIC
+  AOL_TRAFFIC
+  SEARCH_ENGINE_TRAFFIC
+  GOOGLE_ADWORDS_TRAFFIC
+  DIRECT_TRAFFIC
+
+  // Visitor Type
+  NEW_VISITORS
+  RETURNING_VISITORS
+
+  // Social Media
+  FROM_FACEBOOK
+  FROM_INSTAGRAM
+  FROM_X
+  FROM_LINKEDIN
+  FROM_PINTEREST
+  FROM_GOOGLE_PLUS
+  FROM_URL_SHORTENERS
+
+  // Geography - Continents
+  FROM_AFRICA
+  FROM_EUROPE
+  FROM_ASIA
+  FROM_NORTH_AMERICA
+  FROM_SOUTH_AMERICA
+  FROM_OCEANIA
+
+  // Geography - Countries
+  FROM_AUSTRALIA
+  FROM_CANADA
+  FROM_MEXICO
+  FROM_UK
+  FROM_USA
+  FROM_TURKEY
+  FROM_GERMANY
+  FROM_FRANCE
+
+  // Language
+  PREFERS_ENGLISH
+  PREFERS_CHINESE
+  PREFERS_SPANISH
+  PREFERS_RUSSIAN
+  PREFERS_ARABIC
+  PREFERS_PORTUGUESE
+  PREFERS_FRENCH
+  PREFERS_TURKISH
+
+  // Behavior
+  VISITED_5_PAGES
+  VISITED_10_PAGES
+  VISITED_50_PAGES
+  VISITED_SEVERAL_TIMES_THIS_WEEK
+
+  // Time
+  VISITING_ON_WEEKDAY
+  VISITING_IN_WEEKEND
+  VISITING_DURING_MORNING
+  VISITING_DURING_DAY
+  VISITING_DURING_EVENING
+  VISITING_AT_NIGHT
+
+  // Device
+  DEVICE_MOBILE_PHONE
+  DEVICE_TABLET
+  DEVICE_DESKTOP
+
+  // Browser
+  BROWSER_CHROME
+  BROWSER_FIREFOX
+  BROWSER_EDGE
+  BROWSER_SAFARI
+  BROWSER_OPERA
+  BROWSER_IE
+
+  // Operating System
+  OS_WINDOWS
+  OS_MAC
+  OS_LINUX
+  OS_ANDROID
+  OS_IOS
+  OS_CHROME_OS
+
+  // Custom
+  CUSTOM_JAVASCRIPT
+  CUSTOM_COOKIE
+  CUSTOM_QUERY_PARAM
+}
+
+enum ConditionType {
+  AND
+  OR
+}
+
+// ============================================
+// 6. VARIANTS (Test Varyantları)
+// ============================================
+
+model Variant {
+  id           String  @id @default(uuid())
+  experimentId String
+  name         String
+  description  String?
+  isControl    Boolean @default(false)
+  version      Int     @default(1)
+
+  // trafik aralığı
+  trafficWeight Int @default(50) // yüzde cinsinden
+
+  // değişiklikler
+  changes Json @db.JsonB
+
+  // istatistikler
+  visitors    Int @default(0)
+  conversions Int @default(0)
+
+  // İlişkiler
+  experiment      Experiment          @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  assignments     VariantAssignment[]
+  goalConversions GoalConversion[]
+  changeHistories ChangeHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([experimentId, name])
+  @@index([experimentId])
+  @@map("variants")
+}
+
+// ============================================
+// 7. GOALS (Hedefler)
+// ============================================
+model Goal {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  type        GoalType @default(PAGE_VIEW)
+
+  // Goal kuralları
+  urlPattern String? // Sayfa URL pattern
+  selector   String? // CSS selector (click için)
+  eventName  String? // Custom event name
+
+  // Değer (revenue tracking)
+  hasValue        Boolean @default(false)
+  revenueTracking Boolean @default(false)
+
+  isActive Boolean @default(true)
+
+  // İlişkiler
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  experimentGoals ExperimentGoal[]
+  goalConversions GoalConversion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("goals")
+}
+
+enum GoalType {
+  PAGE_VIEW // Sayfa görüntüleme
+  CLICK // Element tıklama
+  FORM_SUBMIT // Form gönderme
+  PURCHASE // Satın alma
+  ENGAGEMENT // Engagement (time on page, scroll depth)
+  CUSTOM_EVENT // Custom JavaScript event
+}
+
+// ============================================
+// 8. EXPERIMENT GOALS (Test-Hedef İlişkisi)
+// ============================================
+model ExperimentGoal {
+  id           String  @id @default(uuid())
+  experimentId String
+  goalId       String
+  isPrimary    Boolean @default(false) // Ana hedef mi?
+
+  // İstatistikler (cache)
+  conversions     Int   @default(0)
+  conversionRate  Float @default(0)
+  confidenceLevel Float @default(0) // 0-100 arası
+
+  // İlişkiler
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  goal       Goal       @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([experimentId, goalId])
+  @@index([experimentId])
+  @@index([goalId])
+  @@map("experiment_goals")
+}
+
+// ============================================
+// 9. VISITORS (Ziyaretçiler)
+// ============================================
+model Visitor {
+  id        String @id @default(uuid())
+  projectId String
+  visitorId String // Cookie/LocalStorage'dan gelen unique ID
+
+  // Visitor bilgileri
+  userAgent String?
+  ipAddress String?
+  country   String? // ISO country code (TR, US, UK)
+  city      String?
+  region    String?
+  continent String? // EUROPE, ASIA, vb.
+  language  String? // Browser language
+
+  // Device & Browser
+  deviceType String? // mobile, tablet, desktop
+  browser    String? // chrome, firefox, safari, edge
+  os         String? // windows, mac, linux, android, ios
+
+  // Behavior
+  firstSeen  DateTime @default(now())
+  lastSeen   DateTime @default(now())
+  visitCount Int      @default(1)
+  pageViews  Int      @default(0)
+
+  // Traffic source
+  referrer    String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+
+  // Custom attributes
+  customData Json? @db.JsonB
+
+  // İlişkiler
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments VariantAssignment[]
+  events      Event[]
+  conversions GoalConversion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, visitorId])
+  @@index([projectId])
+  @@index([visitorId])
+  @@index([country])
+  @@index([deviceType])
+  @@index([utmSource])
+  @@index([utmCampaign])
+  @@map("visitors")
+}
+
+// ============================================
+// 10. VARIANT ASSIGNMENTS (Atamalar)
+// ============================================
+model VariantAssignment {
+  id           String   @id @default(uuid())
+  visitorId    String
+  experimentId String
+  variantId    String
+  assignedAt   DateTime @default(now())
+
+  // İlişkiler
+  visitor    Visitor    @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  variant    Variant    @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([visitorId, experimentId])
+  @@index([experimentId])
+  @@index([variantId])
+  @@map("variant_assignments")
+}
+
+// ============================================
+// 11. EVENTS (Tüm Eventler)
+// ============================================
+model Event {
+  id           String  @id @default(uuid())
+  projectId    String
+  visitorId    String
+  experimentId String?
+  variantId    String?
+
+  eventType EventType
+  eventName String?
+
+  // Event data
+  pageUrl   String?
+  selector  String? // Click için
+  eventData Json?   @db.JsonB
+
+  // Context
+  userAgent String?
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  // İlişkiler
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  visitor Visitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([visitorId])
+  @@index([experimentId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([projectId, createdAt])
+  @@map("events")
+}
+
+enum EventType {
+  EXPERIMENT_VIEW // Test görüntülendi
+  PAGE_VIEW // Sayfa görüntüleme
+  CLICK // Tıklama
+  FORM_SUBMIT // Form gönderme
+  SCROLL // Scroll event
+  CUSTOM // Custom event
+}
+
+// ============================================
+// 12. GOAL CONVERSIONS (Dönüşümler)
+// ============================================
+model GoalConversion {
+  id           String @id @default(uuid())
+  goalId       String
+  experimentId String
+  variantId    String
+  visitorId    String
+
+  // Conversion değeri
+  value    Float? // Revenue değeri
+  currency String? @default("USD")
+
+  // Conversion data
+  conversionData Json? @db.JsonB
+
+  convertedAt DateTime @default(now())
+
+  // İlişkiler
+  goal    Goal    @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  variant Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  visitor Visitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+  @@index([experimentId])
+  @@index([variantId])
+  @@index([convertedAt])
+  @@map("goal_conversions")
+}
+
+// ============================================
+// 13. CHANGE HISTORY (Değişiklik Geçmişi)
+// ============================================
+model ChangeHistory {
+  id           String  @id @default(uuid())
+  projectId    String
+  experimentId String?
+  variantId    String?
+
+  action      String // "Experiment Started", "Variant Modified", "Goal Added"
+  description String?
+  changedBy   String? // User ID veya "System"
+
+  // Değişiklik detayları
+  before Json? @db.JsonB
+  after  Json? @db.JsonB
+
+  createdAt DateTime @default(now())
+
+  // İlişkiler
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  experiment Experiment? @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  variant    Variant?    @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([experimentId])
+  @@index([variantId])
+  @@index([createdAt])
+  @@map("change_histories")
+}
+
+// ============================================
+// 14. LIVE LOGS (Canlı Log Kayıtları)
+// ============================================
+model LiveLog {
+  id           String  @id @default(uuid())
+  experimentId String
+  visitorId    String
+  variantId    String?
+
+  logType LiveLogType
+  message String
+  details Json?       @db.JsonB
+
+  // Visitor context
+  country    String?
+  city       String?
+  deviceType String?
+  browser    String?
+
+  createdAt DateTime  @default(now())
+  archived  Boolean   @default(false)
+  expiresAt DateTime?
+
+  // İlişkiler
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@index([experimentId])
+  @@index([createdAt])
+  @@map("live_logs")
+}
+
+enum LiveLogType {
+  VISITOR_ASSIGNED
+  PAGE_VIEW
+  GOAL_CONVERSION
+  EXPERIMENT_ERROR
+}
+
+model ExperimentDailyStat {
+  id           String   @id @default(uuid())
+  experimentId String
+  date         DateTime
+  impressions  Int      @default(0)
+  conversions  Int      @default(0)
+  revenue      Float    @default(0)
+
+  @@unique([experimentId, date])
+  @@index([experimentId, date])
+}

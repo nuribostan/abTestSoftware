@@ -1,0 +1,42 @@
+{
+  "projectId": "proj_123",
+  "version": 1,
+  "experiments": [
+    {
+      "id": "exp_header_color",
+      "status": "RUNNING",
+      "trafficAllocation": 100,
+      "urlPattern": ".*",
+      "variants": [
+        {
+          "id": "control",
+          "trafficWeight": 50,
+          "changes": []
+        },
+        {
+          "id": "variant_b",
+          "trafficWeight": 50,
+          "changes": [
+            {
+              "selector": "h1",
+              "action": "setStyle",
+              "value": "color: red; text-decoration: underline;"
+            },
+            {
+              "selector": "h1",
+              "action": "setText",
+              "value": "Merhaba Dünya! (Varyant B)"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal_click_btn",
+      "type": "CLICK",
+      "selector": "#action-btn"
+    }
+  ]
+}

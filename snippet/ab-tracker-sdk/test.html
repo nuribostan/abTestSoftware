@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AB Test Demo</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 50px;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      h1 {
+        color: #333;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+    </style>
+
+    <!-- Müşteri Snippet Kodu -->
+    <script>
+      !(function (a, b, c, d) {
+        (a.abConfig = {
+          projectId: c,
+          ingestUrl: d,
+          configUrl:
+            "https://ab-test-cdn-bostan.s3.eu-central-1.amazonaws.com/proj_123.json",
+        }), // 1. Aşamadaki S3 URL
+          (a[b] =
+            a[b] ||
+            function () {
+              (a[b].q = a[b].q || []).push(arguments);
+            });
+        var s = document.createElement("script");
+        s.async = 1;
+        s.src =
+          "https://ab-test-cdn-bostan.s3.eu-central-1.amazonaws.com/ab-sdk.min.js";
+        s.onload = function () {
+          window.initAB(a.abConfig);
+        };
+        document.head.appendChild(s);
+      })(
+        window,
+        "ab",
+        "proj_123",
+        "https://q4tmqrxq8f.execute-api.eu-central-1.amazonaws.com/v1"
+      ); // 2. Aşamadaki API Gateway URL
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Test edilecek element -->
+      <h1>Orijinal Başlık</h1>
+
+      <p>
+        Bu bir örnek sayfadır. AB testi yüklendiğinde başlığın rengi ve yazısı
+        değişebilir (%50 ihtimalle).
+      </p>
+
+      <!-- Hedef (Goal) butonu -->
+      <button id="action-btn">Satın Al</button>
+    </div>
+  </body>
+</html>
