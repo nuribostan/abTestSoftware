@@ -1,11 +1,11 @@
-import { FirehoseTransformationEvent, FirehoseTransformationResult } from "aws-lambda";
+import { KinesisStreamEvent } from "aws-lambda";
 import { getPrismaClient } from "../shared/prisma";
 import { IncomingEvent, EventType } from "../shared/types";
 
 /**
  * Event Processor Lambda
  * 
- * Kinesis Firehose'dan gelen event batch'lerini işler.
+ * Kinesis Data Streams'den gelen event batch'lerini işler.
  * 
  * İşlem adımları:
  * 1. Event'leri decode et
@@ -13,20 +13,18 @@ import { IncomingEvent, EventType } from "../shared/types";
  *    - Visitor kaydı oluştur/güncelle
  *    - Event tipine göre işle
  *    - İstatistikleri güncelle
- * 3. İşlenmiş event'leri S3'e yaz
  */
 export const handler = async (
-  event: FirehoseTransformationEvent
-): Promise<FirehoseTransformationResult> => {
+  event: KinesisStreamEvent
+): Promise<void> => {
   const db = getPrismaClient();
-  const output: FirehoseTransformationResult["records"] = [];
 
-  console.log(`Processing ${event.records.length} records`);
+  console.log(`Processing ${event.Records.length} records`);
 
-  for (const record of event.records) {
+  for (const record of event.Records) {
     try {
       // Base64 decode
-      const payload = Buffer.from(record. data, "base64").toString("utf-8");
+      const payload = Buffer.from(record.kinesis.data, "base64").toString("utf-8");
       
       // Event array veya tek event olabilir
       let events: IncomingEvent[];
@@ -35,11 +33,6 @@ export const handler = async (
         events = Array.isArray(parsed) ? parsed : [parsed];
       } catch {
         console.error("Invalid JSON:", payload);
-        output.push({
-          recordId: record. recordId,
-          result: "ProcessingFailed",
-          data: record.data,
-        });
         continue;
       }
 
@@ -48,29 +41,16 @@ export const handler = async (
         try {
           await processEvent(db, evt);
         } catch (err) {
-          console. error("Event processing error:", err, evt);
+          console.error("Event processing error:", err, evt);
         }
       }
 
-      // Başarılı - S3'e yaz
-      output.push({
-        recordId: record.recordId,
-        result: "Ok",
-        data: record.data,
-      });
-
     } catch (err) {
       console.error("Record processing error:", err);
-      output.push({
-        recordId: record.recordId,
-        result: "ProcessingFailed",
-        data: record.data,
-      });
     }
   }
 
-  console.log(`Processed ${output.length} records`);
-  return { records: output };
+  console.log(`Processed ${event.Records.length} records`);
 };
 
 /**
