@@ -9,7 +9,7 @@ export const getPrismaClient = (): PrismaClient => {
     prisma = new PrismaClient({
       datasources: {
         db: {
-          url: process.env. DATABASE_URL,
+          url: process.env.DATABASE_URL,
         },
       },
       // Lambda için connection pool ayarları
