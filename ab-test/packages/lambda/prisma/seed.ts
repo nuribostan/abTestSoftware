@@ -1,4 +1,4 @@
-import { PrismaClient } from "../generated/prisma";
+import { PrismaClient } from "./client";
 
 const prisma = new PrismaClient();
 
@@ -7,7 +7,7 @@ async function main() {
 
   // 1. Test User oluştur
   const user = await prisma.user.upsert({
-    where: { email: "test@example. com" },
+    where: { email: "test@example.com" },
     update: {},
     create: {
       email: "test@example.com",
@@ -37,7 +37,7 @@ async function main() {
   console.log("   📌 API Key:", project.apiKey);
   console.log("   📌 Tracking Code:", project.trackingCode);
 
-  // 3. Test Experiment oluştur
+  // 3.  Test Experiment oluştur
   const experiment = await prisma.experiment.create({
     data: {
       projectId: project.id,
