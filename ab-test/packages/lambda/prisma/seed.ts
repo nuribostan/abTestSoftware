@@ -37,9 +37,11 @@ async function main() {
   console.log("   📌 API Key:", project.apiKey);
   console.log("   📌 Tracking Code:", project.trackingCode);
 
-  // 3.  Test Experiment oluştur
-  const experiment = await prisma.experiment.create({
-    data: {
+  // 3.  Test Experiment oluştur (idempotent)
+  const experiment = await prisma.experiment.upsert({
+    where: { name_projectId: { name: "Homepage Hero Test", projectId: project.id } },
+    update: {},
+    create: {
       projectId: project.id,
       name: "Homepage Hero Test",
       url: "http://localhost",
@@ -51,9 +53,11 @@ async function main() {
   });
   console.log("✅ Experiment created:", experiment.name);
 
-  // 4.  Location (URL targeting) oluştur
-  await prisma.location.create({
-    data: {
+  // 4.  Location (URL targeting) oluştur - upsert ile idempotent yap
+  await prisma.location.upsert({
+    where: { projectId_name: { projectId: project.id, name: "All Pages" } },
+    update: {},
+    create: {
       projectId: project.id,
       experimentId: experiment.id,
       name: "All Pages",
@@ -64,9 +68,11 @@ async function main() {
   });
   console.log("✅ Location created");
 
-  // 5. Control Variant oluştur
-  const controlVariant = await prisma.variant.create({
-    data: {
+  // 5. Control Variant oluştur (upsert ile idempotent)
+  await prisma.variant.upsert({
+    where: { experimentId_name: { experimentId: experiment.id, name: "Control" } },
+    update: {},
+    create: {
       experimentId: experiment.id,
       name: "Control",
       description: "Original version",
@@ -75,11 +81,13 @@ async function main() {
       changes: [],
     },
   });
-  console.log("✅ Control variant created:", controlVariant.name);
+  console.log("✅ Control variant created: Control");
 
-  // 6. Test Variant oluştur
-  const testVariant = await prisma.variant.create({
-    data: {
+  // 6. Test Variant oluştur (upsert)
+  await prisma.variant.upsert({
+    where: { experimentId_name: { experimentId: experiment.id, name: "Variant A" } },
+    update: {},
+    create: {
       experimentId: experiment.id,
       name: "Variant A",
       description: "New design",
@@ -99,11 +107,13 @@ async function main() {
       ],
     },
   });
-  console.log("✅ Test variant created:", testVariant.name);
+  console.log("✅ Test variant created: Variant A");
 
-  // 7. Click Goal oluştur
-  const clickGoal = await prisma.goal.create({
-    data: {
+  // 7. Click Goal oluştur -> upsert (unique constraint'ten kaçınmak için)
+  const clickGoal = await prisma.goal.upsert({
+    where: { projectId_name: { projectId: project.id, name: "CTA Button Click" } },
+    update: {},
+    create: {
       projectId: project.id,
       name: "CTA Button Click",
       description: "User clicks the CTA button",
@@ -112,11 +122,13 @@ async function main() {
       isActive: true,
     },
   });
-  console.log("✅ Click goal created:", clickGoal.name);
+  console.log("✅ Click goal created or existing:", clickGoal.name);
 
-  // 8. Purchase Goal oluştur
-  const purchaseGoal = await prisma.goal.create({
-    data: {
+  // 8. Purchase Goal oluştur -> upsert
+  const purchaseGoal = await prisma.goal.upsert({
+    where: { projectId_name: { projectId: project.id, name: "Purchase" } },
+    update: {},
+    create: {
       projectId: project.id,
       name: "Purchase",
       description: "User completes purchase",
@@ -126,19 +138,23 @@ async function main() {
       isActive: true,
     },
   });
-  console.log("✅ Purchase goal created:", purchaseGoal.name);
+  console.log("✅ Purchase goal created or existing:", purchaseGoal.name);
 
-  // 9. Goals'ları Experiment'a bağla
-  await prisma.experimentGoal.create({
-    data: {
+  // 9. Goals'ları Experiment'a bağla (upsert)
+  await prisma.experimentGoal.upsert({
+    where: { experimentId_goalId: { experimentId: experiment.id, goalId: clickGoal.id } },
+    update: {},
+    create: {
       experimentId: experiment.id,
       goalId: clickGoal.id,
       isPrimary: true,
     },
   });
 
-  await prisma.experimentGoal.create({
-    data: {
+  await prisma.experimentGoal.upsert({
+    where: { experimentId_goalId: { experimentId: experiment.id, goalId: purchaseGoal.id } },
+    update: {},
+    create: {
       experimentId: experiment.id,
       goalId: purchaseGoal.id,
       isPrimary: false,
@@ -154,8 +170,6 @@ async function main() {
   console.log("API Key:        ", project.apiKey);
   console.log("Tracking Code:  ", project.trackingCode);
   console.log("Experiment ID:  ", experiment.id);
-  console.log("Control ID:     ", controlVariant.id);
-  console.log("Variant A ID:   ", testVariant.id);
   console.log("\n" + "=".repeat(50));
 }
 
