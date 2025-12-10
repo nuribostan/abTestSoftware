@@ -19,7 +19,7 @@ async function main() {
       emailVerified: true,
     },
   });
-  console.log("✅ User created:", user.email);
+  console.log("✅ User created:", user. email);
 
   // 2. Test Project oluştur / varsa al (domain unique)
   const project = await prisma.project.upsert({
@@ -33,18 +33,18 @@ async function main() {
       timezone: "Europe/Istanbul",
     },
   });
-  console.log("✅ Project created:", project.name);
+  console.log("✅ Project created:", project. name);
   console.log("   📌 API Key:", project.apiKey);
   console.log("   📌 Tracking Code:", project.trackingCode);
 
   // 3. Experiment - önce var mı kontrol et, yoksa oluştur
-  let experiment = await prisma.experiment.findFirst({
+  let experiment = await prisma.experiment. findFirst({
     where: { projectId: project.id, name: "Homepage Hero Test" },
   });
   if (!experiment) {
-    experiment = await prisma.experiment.create({
+    experiment = await prisma. experiment.create({
       data: {
-        projectId: project.id,
+        projectId: project. id,
         name: "Homepage Hero Test",
         url: "http://localhost",
         type: "AB",
@@ -57,13 +57,13 @@ async function main() {
   console.log("✅ Experiment created or existing:", experiment.name);
 
   // 4. Location (URL targeting) - önce kontrol et, yoksa oluştur
-  let location = await prisma.location.findFirst({
+  let location = await prisma.location. findFirst({
     where: { projectId: project.id, name: "All Pages" },
   });
   if (!location) {
-    location = await prisma.location.create({
+    location = await prisma. location.create({
       data: {
-        projectId: project.id,
+        projectId: project. id,
         experimentId: experiment.id,
         name: "All Pages",
         type: "URL",
@@ -75,7 +75,7 @@ async function main() {
   console.log("✅ Location created or existing");
 
   // 5. Control Variant - önce kontrol et, yoksa oluştur (Variant @@unique([experimentId, name]))
-  let controlVariant = await prisma.variant.findFirst({
+  let controlVariant = await prisma. variant.findFirst({
     where: { experimentId: experiment.id, name: "Control" },
   });
   if (!controlVariant) {
@@ -97,7 +97,7 @@ async function main() {
     where: { experimentId: experiment.id, name: "Variant A" },
   });
   if (!testVariant) {
-    testVariant = await prisma.variant.create({
+    testVariant = await prisma.variant. create({
       data: {
         experimentId: experiment.id,
         name: "Variant A",
@@ -108,10 +108,10 @@ async function main() {
           {
             selector: "h1",
             action: "setText",
-            value: "🚀 Yeni Tasarım!",
+            value: "🚀 Yeni Tasarım! ",
           },
           {
-            selector: ".cta-button",
+            selector: ". cta-button",
             action: "setStyle",
             value: "background-color: #10b981; color: white;",
           },
@@ -141,12 +141,12 @@ async function main() {
 
   // 8. Purchase Goal - önce kontrol et, yoksa oluştur
   let purchaseGoal = await prisma.goal.findFirst({
-    where: { projectId: project.id, name: "Purchase" },
+    where: { projectId:  project.id, name: "Purchase" },
   });
   if (!purchaseGoal) {
     purchaseGoal = await prisma.goal.create({
       data: {
-        projectId: project.id,
+        projectId:  project.id,
         name: "Purchase",
         description: "User completes purchase",
         type: "CUSTOM_EVENT",
@@ -160,7 +160,7 @@ async function main() {
 
   // 9. Goals'ları Experiment'a bağla (ExperimentGoal @@unique([experimentId, goalId]))
   const existingExpGoal1 = await prisma.experimentGoal.findFirst({
-    where: { experimentId: experiment.id, goalId: clickGoal.id },
+    where: { experimentId: experiment.id, goalId: clickGoal. id },
   });
   if (!existingExpGoal1) {
     await prisma.experimentGoal.create({
@@ -176,9 +176,9 @@ async function main() {
     where: { experimentId: experiment.id, goalId: purchaseGoal.id },
   });
   if (!existingExpGoal2) {
-    await prisma.experimentGoal.create({
+    await prisma. experimentGoal.create({
       data: {
-        experimentId: experiment.id,
+        experimentId:  experiment.id,
         goalId: purchaseGoal.id,
         isPrimary: false,
       },
@@ -194,6 +194,8 @@ async function main() {
   console.log("API Key:        ", project.apiKey);
   console.log("Tracking Code:  ", project.trackingCode);
   console.log("Experiment ID:  ", experiment.id);
+  console.log("Control ID:      ", controlVariant.id);
+  console.log("Variant A ID:   ", testVariant.id);
   console.log("\n" + "=".repeat(50));
 }
 
